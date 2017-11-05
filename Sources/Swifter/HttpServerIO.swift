@@ -7,9 +7,9 @@
 
 
 #if os(Linux)
-    import Glibc
+import Glibc
 #else
-    import Foundation
+import Foundation
 #endif
 
 public class HttpServerIO {
@@ -36,6 +36,7 @@ public class HttpServerIO {
         stop()
         socket = try Socket.tcpSocketForListen(listenPort, forceIPv4)
         self.running = true
+        #if os(Linux)
         DispatchQueue.global(attributes: DispatchQueue.GlobalAttributes.qosBackground).async {
             while let socket = try? self.socket.acceptClientSocket() {
                 DispatchQueue.global(attributes: DispatchQueue.GlobalAttributes.qosBackground).async {
@@ -47,6 +48,19 @@ public class HttpServerIO {
             self.stop()
             self.running = false
         }
+        #else
+        DispatchQueue.global(qos: DispatchQoS.QoSClass.background).async {
+            while let socket = try? self.socket.acceptClientSocket() {
+                DispatchQueue.global(qos: DispatchQoS.QoSClass.background).async {
+                    self.sockets.insert(socket)
+                    self.handleConnection(socket)
+                    self.sockets.remove(socket)
+                }
+            }
+            self.stop()
+            self.running = false
+        }
+        #endif
     }
     
     public func stop() {
@@ -91,7 +105,7 @@ public class HttpServerIO {
         let socket: Socket
         
         func write(_ file: String.File) throws {
-            try socket.writeFile(file: file)
+            try socket.writeFile(file)
         }
         
         func write(_ data: [UInt8]) throws {
@@ -121,7 +135,7 @@ public class HttpServerIO {
         }
         
         try socket.writeUTF8("\r\n")
-    
+        
         if let writeClosure = content.write {
             let context = InnerWriteContext(socket: socket)
             try writeClosure(context)
@@ -153,17 +167,18 @@ public class DispatchQueue {
     }
     
     public func async(execute work: @escaping @convention(block) () -> Swift.Void) {
-	let context = Unmanaged.passRetained(DispatchContext(work)).toOpaque()
+        let context = Unmanaged.passRetained(DispatchContext(work)).toOpaque()
         var pthread: pthread_t = 0
-    	pthread_create(&pthread, nil, { (context) -> UnsafeMutableRawPointer? in
-		if let cont = context {
-			let unmanaged = Unmanaged<DispatchContext>.fromOpaque(cont)
-        		_ = unmanaged.takeUnretainedValue().block
-        		unmanaged.release()
-		}
-        	return nil
-    	}, context)
+        pthread_create(&pthread, nil, { (context) -> UnsafeMutableRawPointer? in
+            if let cont = context {
+                let unmanaged = Unmanaged<DispatchContext>.fromOpaque(cont)
+                _ = unmanaged.takeUnretainedValue().block
+                unmanaged.release()
+            }
+            return nil
+        }, context)
     }
 }
 
 #endif
+
