@@ -1,6 +1,19 @@
+// swift-tools-version:4.0
 import PackageDescription
 
 let package = Package(
-	name: "Swifter",
-    targets: [Target(name: "Swifter", dependencies: ["CSQLite"])]
+    name: "Swifter",
+    products: [
+        .library(
+            name: "Swifter",
+            targets: ["Swifter"]
+        )
+    ],
+    dependencies: [],
+    targets: [
+        .target(
+            name: "Swifter",
+            dependencies: []
+        )
+    ]
 )
