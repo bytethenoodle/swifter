@@ -44,42 +44,19 @@ extension String {
         return String(scalars)
     }
     
+
     public static func fromUInt8(_ array: [UInt8]) -> String {
         // Apple changes the definition of String(data: .... ) every release so let's stay with 'fromUInt8(...)' wrapper.
-        return array.reduce("", { $0.0 + String(UnicodeScalar($0.1)) })
+	if let str = String(bytes: array, encoding: .utf8) {
+		return str
+	}
+	else {
+		return ""
+	}
     }
     
     public func removePercentEncoding() -> String {
-        var scalars = self.unicodeScalars
-        var output = ""
-        var decodeBuffer = [UInt8]()
-        while let scalar = scalars.popFirst() {
-            if scalar == "%" {
-                let first = scalars.popFirst()
-                let secon = scalars.popFirst()
-                if let first = first?.asAlpha(), let secon = secon?.asAlpha() {
-                    decodeBuffer.append(first*16+secon)
-                } else {
-                    if !decodeBuffer.isEmpty {
-                        output.append(String.fromUInt8(decodeBuffer))
-                        decodeBuffer.removeAll()
-                    }
-                    if let first = first { output.append(Character(first)) }
-                    if let secon = secon { output.append(Character(secon)) }
-                }
-            } else {
-                if !decodeBuffer.isEmpty {
-                    output.append(String.fromUInt8(decodeBuffer))
-                    decodeBuffer.removeAll()
-                }
-                output.append(Character(scalar))
-            }
-        }
-        if !decodeBuffer.isEmpty {
-            output.append(String.fromUInt8(decodeBuffer))
-            decodeBuffer.removeAll()
-        }
-        return output
+        return self.removingPercentEncoding == nil ? "" : self.removingPercentEncoding!
     }
 }
 

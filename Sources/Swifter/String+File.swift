@@ -103,7 +103,7 @@ extension String {
             var name = ent.pointee.d_name
             let fileName = withUnsafePointer(to: &name) { (ptr) -> String? in
                 #if os(Linux)
-                    return String.fromCString([CChar](UnsafeBufferPointer<CChar>(start: UnsafePointer(unsafeBitCast(ptr, UnsafePointer<CChar>.self)), count: 256)))
+                    return String(validatingUTF8: [CChar](UnsafeBufferPointer<CChar>(start: UnsafePointer(unsafeBitCast(ptr, to: UnsafePointer<CChar>.self)), count: 256)))
                 #else
                     var buffer = [CChar](UnsafeBufferPointer(start: unsafeBitCast(ptr, to: UnsafePointer<CChar>.self), count: Int(ent.pointee.d_namlen)))
                     buffer.append(0)

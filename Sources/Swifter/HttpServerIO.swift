@@ -36,9 +36,9 @@ public class HttpServerIO {
         stop()
         socket = try Socket.tcpSocketForListen(listenPort, forceIPv4)
         self.running = true
-        DispatchQueue.global(qos: DispatchQoS.QoSClass.background).async {
+        DispatchQueue.global(attributes: DispatchQueue.GlobalAttributes.qosBackground).async {
             while let socket = try? self.socket.acceptClientSocket() {
-                DispatchQueue.global(qos: DispatchQoS.QoSClass.background).async {
+                DispatchQueue.global(attributes: DispatchQueue.GlobalAttributes.qosBackground).async {
                     self.sockets.insert(socket)
                     self.handleConnection(socket)
                     self.sockets.remove(socket)
@@ -91,8 +91,7 @@ public class HttpServerIO {
         let socket: Socket
         
         func write(_ file: String.File) throws {
-            var offset: off_t = 0
-            let _ = sendfile(fileno(file.pointer), socket.socketFileDescriptor, 0, &offset, nil, 0)
+            try socket.writeFile(file: file)
         }
         
         func write(_ data: [UInt8]) throws {
@@ -148,22 +147,22 @@ public class DispatchQueue {
     
     private class DispatchContext {
         let block: ((Void) -> Void)
-        init(_ block: ((Void) -> Void)) {
+        init(_ block: @escaping((Void) -> Void)) {
             self.block = block
         }
     }
     
-    public func async(execute work: @convention(block) () -> Swift.Void) {
-        let context = UnsafeMutablePointer<Void>(OpaquePointer(bitPattern: Unmanaged.passRetained(DispatchContext(work))))
+    public func async(execute work: @escaping @convention(block) () -> Swift.Void) {
+	let context = Unmanaged.passRetained(DispatchContext(work)).toOpaque()
         var pthread: pthread_t = 0
-        pthread_create(&pthread, nil, { (context: UnsafeMutablePointer<Swift.Void>?) -> UnsafeMutablePointer<Swift.Void>? in
-	    if let context = context {
-                let unmanaged = Unmanaged<DispatchContext>.fromOpaque(OpaquePointer(context))
-                unmanaged.takeUnretainedValue().block()
-                unmanaged.release()
-            }
-            return nil
-        }, context)
+    	pthread_create(&pthread, nil, { (context) -> UnsafeMutableRawPointer? in
+		if let cont = context {
+			let unmanaged = Unmanaged<DispatchContext>.fromOpaque(cont)
+        		_ = unmanaged.takeUnretainedValue().block
+        		unmanaged.release()
+		}
+        	return nil
+    	}, context)
     }
 }
 
