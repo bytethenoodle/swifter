@@ -54,8 +54,6 @@ public class HttpServerIO {
     /// Otherwise, `listenAddressIPv4` will be used.
     public var listenAddressIPv6: String?
 
-    private let queue = DispatchQueue(label: "swifter.httpserverio.clientsockets")
-
     public func port() throws -> Int {
         return Int(try socket.port())
     }
@@ -68,44 +66,30 @@ public class HttpServerIO {
         stop()
     }
 
-    @available(macOS 10.10, *)
-    public func start(_ port: in_port_t = 8080, forceIPv4: Bool = false, priority: DispatchQoS.QoSClass = DispatchQoS.QoSClass.background) throws {
-        guard !self.operating else { return }
+    @available(OSX 10.10, *)
+    public func start(_ listenPort: in_port_t = 8080, forceIPv4: Bool = false) throws {
         stop()
-        self.state = .starting
-        let address = forceIPv4 ? listenAddressIPv4 : listenAddressIPv6
-        self.socket = try Socket.tcpSocketForListen(port, forceIPv4, SOMAXCONN, address)
-        DispatchQueue.global(qos: priority).async { [weak self] in
-            guard let strongSelf = self else { return }
-            guard strongSelf.operating else { return }
-            while let socket = try? strongSelf.socket.acceptClientSocket() {
-                DispatchQueue.global(qos: priority).async { [weak self] in
-                    guard let strongSelf = self else { return }
-                    guard strongSelf.operating else { return }
-                    strongSelf.queue.async {
-                        strongSelf.sockets.insert(socket)
-                    }
-                    strongSelf.handleConnection(socket)
-                    strongSelf.queue.async {
-                        strongSelf.sockets.remove(socket)
-                    }
+        socket = try Socket.tcpSocketForListen(listenPort, forceIPv4)
+        self.state = .running
+        DispatchQueue.global(attributes: DispatchQueue.GlobalAttributes.qosBackground).async {
+            while let socket = try? self.socket.acceptClientSocket() {
+                DispatchQueue.global(attributes: 	DispatchQueue.GlobalAttributes.qosBackground).async {
+                    self.sockets.insert(socket)
+                    self.handleConnection(socket)
+                    self.sockets.remove(socket)
                 }
             }
-            strongSelf.stop()
+            self.stop()
+            self.state = .stopped
         }
-        self.state = .running
     }
-
+    
     public func stop() {
-        guard self.operating else { return }
-        self.state = .stopping
         // Shutdown connected peers because they can live in 'keep-alive' or 'websocket' loops.
         for socket in self.sockets {
             socket.close()
         }
-        self.queue.sync {
-            self.sockets.removeAll(keepingCapacity: true)
-        }
+        self.sockets.removeAll(keepingCapacity: true)
         socket.close()
         self.state = .stopped
     }
@@ -195,3 +179,40 @@ public class HttpServerIO {
         return keepAlive && content.length != -1;
     }
 }
+
+#if os(Linux)
+
+public class DispatchQueue {
+    
+    private static let instance = DispatchQueue()
+    
+    public struct GlobalAttributes {
+        public static let qosBackground: DispatchQueue.GlobalAttributes = GlobalAttributes()
+    }
+    
+    public class func global(attributes: DispatchQueue.GlobalAttributes) -> DispatchQueue {
+        return instance
+    }
+    
+    private class DispatchContext {
+        let block: ((Void) -> Void)
+        init(_ block: @escaping((Void) -> Void)) {
+            self.block = block
+        }
+    }
+    
+    public func async(execute work: @escaping @convention(block) () -> Swift.Void) {
+	let context = Unmanaged.passRetained(DispatchContext(work)).toOpaque()
+        var pthread: pthread_t = 0
+    	pthread_create(&pthread, nil, { (context) -> UnsafeMutableRawPointer? in
+		if let cont = context {
+			let unmanaged = Unmanaged<DispatchContext>.fromOpaque(cont)
+        		_ = unmanaged.takeUnretainedValue().block
+        		unmanaged.release()
+		}
+        	return nil
+    	}, context)
+    }
+}
+
+#endif

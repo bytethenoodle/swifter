@@ -728,10 +728,11 @@ private func evaluate(_ node: String, _ attrs: [String: String?] = [:], _ c: Clo
     }
     
     output = output + mergedAttributes.reduce("") {
-        if let value = $0.1.1 {
-            return $0.0 + " \($0.1.0)=\"\(value)\""
-        } else {
-            return $0.0
+        if let value = $1.1 {
+            return $0 + " \($1.0)=\"\(value)\""
+        }
+	else {
+            return $0
         }
     }
     
