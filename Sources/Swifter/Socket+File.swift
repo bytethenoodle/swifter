@@ -47,7 +47,7 @@ extension Socket {
         var sf: sf_hdtr = sf_hdtr()
         
         #if os(iOS) || os(tvOS) || os (Linux)
-        let result = sendfileImpl(file.pointer, self.socketFileDescriptor, 0, &offset, &sf, 0)
+        let result = sendfileImpl(source: fileno(file.pointer), self.socketFileDescriptor, 0, &offset, nil, 0)
         #else
         let result = sendfile(fileno(file.pointer), self.socketFileDescriptor, 0, &offset, &sf, 0)
         #endif
