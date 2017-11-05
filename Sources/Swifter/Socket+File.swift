@@ -40,19 +40,22 @@
     
 #endif
 
-#if os(iOS) || os(tvOS) || os (Linux)
-
 extension Socket {
     
-    public func writeFile(file: String.File) throws -> Void {
+    public func writeFile(_ file: String.File) throws -> Void {
         var offset: off_t = 0
-        let result = sendfileImpl(source: fileno(file.pointer), self.socketFileDescriptor, 0, &offset, nil, 0)
+        var sf: sf_hdtr = sf_hdtr()
+        
+        #if os(iOS) || os(tvOS) || os (Linux)
+        let result = sendfileImpl(file.pointer, self.socketFileDescriptor, 0, &offset, &sf, 0)
+        #else
+        let result = sendfile(fileno(file.pointer), self.socketFileDescriptor, 0, &offset, &sf, 0)
+        #endif
+        
         if result == -1 {
             throw SocketError.writeFailed("sendfile: " + Process.lastErrno)
         }
     }
     
 }
-
-#endif
 
