@@ -27,3 +27,4 @@ DerivedData
 
 .build/
 Packages/
+.DS_Store
